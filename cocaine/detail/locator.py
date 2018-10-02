@@ -23,6 +23,7 @@ from .api import API
 from .baseservice import BaseService
 from .defaults import Defaults
 
+LOCATOR_SERVICE_NAME = "locator"
 LOCATOR_DEFAULT_ENDPOINTS = Defaults.locators
 
 
@@ -30,6 +31,6 @@ class Locator(BaseService):
     def __init__(self, endpoints=LOCATOR_DEFAULT_ENDPOINTS, io_loop=None):
         if io_loop:
             warnings.warn('io_loop argument is deprecated.', DeprecationWarning)
-        super(Locator, self).__init__(name="locator",
+        super(Locator, self).__init__(name=LOCATOR_SERVICE_NAME,
                                       endpoints=endpoints, io_loop=io_loop)
         self.api = API.Locator
