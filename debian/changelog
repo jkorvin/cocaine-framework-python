@@ -1,3 +1,11 @@
+cocaine-framework-python (0.12.14.6) unstable; urgency=low
+
+  * Fix tests, deprecate io_loop passing (#79)
+  * feat: Support TVM2 in SecureServiceAdapter
+  * fix: Fix msgpack requirement
+
+ -- Artem Selishchev <arselishev@gmail.com>  Wed, 03 Oct 2018 16:02:10 +0300
+
 cocaine-framework-python (0.12.14.5) unstable; urgency=low
 
   * Fix dependency from msgpack
