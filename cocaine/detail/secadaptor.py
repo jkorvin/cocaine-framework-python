@@ -6,8 +6,10 @@ service and inject security token into the header of service request.
 
 import time
 
+from collections import namedtuple
 from tornado import gen
 
+from .locator import LOCATOR_DEFAULT_ENDPOINTS
 from .service import Service
 from ..exceptions import CocaineError
 
@@ -28,8 +30,18 @@ class Promiscuous(object):
         raise gen.Return('')
 
 
+Credentials = namedtuple('Credentials', [
+    'client_id',
+    'client_secret',
+])
+
+
+def _make_token(auth_type, ticket):
+    return '{} {}'.format(auth_type, ticket)
+
+
 class TVM(object):
-    """Tokens fetch interface implementation.
+    """Tokens fetch interface implementation with using of TVM protocol.
 
     Provides public `fetch_token` method, which should be common
     among various token backend types.
@@ -38,54 +50,82 @@ class TVM(object):
     # in less general name formatting rules.
     TYPE = 'TVM'
 
-    def __init__(self, client_id, client_secret, name='tvm'):
+    def __init__(self, service, credentials):
         """TVM
 
-        :param client_id: Integer client identifier.
-        :param client_secret: Client secret.
-        :param name: TVM service name, defaults to 'tvm'.
+        :param service: TVM service.
+        :param credentials: Credentials for token fetching
         """
-        self._client_id = client_id
-        self._client_secret = client_secret
-
-        self._tvm = Service(name)
+        self._tvm = service
+        self._credentials = credentials
 
     @gen.coroutine
     def fetch_token(self):
         """Gains token from secure backend service.
+        Token allows to visit any destination under TVM protection
 
         :return: Token formatted for Cocaine protocol header.
         """
         grant_type = 'client_credentials'
-
         channel = yield self._tvm.ticket_full(
-            self._client_id, self._client_secret, grant_type, {})
+            self._credentials.client_id,
+            self._credentials.client_secret,
+            grant_type,
+            {}
+        )
         ticket = yield channel.rx.get()
 
-        raise gen.Return(self._make_token(ticket))
+        raise gen.Return(_make_token(self.TYPE, ticket))
 
-    def _make_token(self, ticket):
-        return '{} {}'.format(self.TYPE, ticket)
+
+class TVM2(object):
+    """Tokens fetch interface implementation with using of TVM2 protocol.
+
+    Provides public `fetch_token` method, which should be common
+    among various token backend types.
+    """
+    TYPE = 'TVM2'
+
+    def __init__(self, service, credentials):
+        """TVM2
+
+        :param service: TVM service.
+        :param credentials: Credentials for token fetching
+        """
+        self._tvm2 = service
+        self._credentials = credentials
+
+    @gen.coroutine
+    def fetch_token(self):
+        """Gains token from secure backend service.
+        Token allows to visit any Cocaine service under TVM2 protection
+
+        :return: Token formatted for Cocaine protocol header.
+        """
+        channel = yield self._tvm2.ticket(
+            self._credentials.client_id,
+            self._credentials.client_secret,
+        )
+        ticket = yield channel.rx.get()
+
+        raise gen.Return(_make_token(self.TYPE, ticket))
 
 
 class SecureServiceAdaptor(object):
     """Wrapper for injecting service method with secure token.
     """
-    def __init__(self, wrapped, secure, tok_update_sec=None):
+    def __init__(self, wrapped, secure, token_expiration_s=0):
         """
         :param wrapped: Cocaine service.
         :param secure: Tokens provider with `fetch_token` implementation.
+        :param token_expiration_s: Token update interval in seconds.
         """
         self._wrapped = wrapped
         self._secure = secure
-
-        self._to_expire = None
-        self._tok_update_sec = tok_update_sec
-
-        if tok_update_sec:
-            self._to_expire = time.time() + tok_update_sec
+        self._token_expiration_s = token_expiration_s
 
         self._token = None
+        self._to_expire = 0
 
     @gen.coroutine
     def connect(self, traceid=None):
@@ -97,17 +137,9 @@ class SecureServiceAdaptor(object):
     @gen.coroutine
     def _get_token(self):
         try:
-            # TODO: Seems too many branches with common ending.
-            if self._to_expire:
-                if time.time() > self._to_expire:
-                    # tok_update_sec should be set in __init__ when
-                    # self._to_expire is valid
-                    self._token = yield self._secure.fetch_token()
-                    self._to_expire = time.time() + self._tok_update_sec
-                elif not self._token:  # init state
-                    self._token = yield self._secure.fetch_token()
-            else:
+            if time.time() >= self._to_expire:
                 self._token = yield self._secure.fetch_token()
+                self._to_expire = time.time() + self._token_expiration_s
         except Exception as err:
             raise SecureServiceError(
                 'failed to fetch secure token: {}'.format(err))
@@ -125,18 +157,41 @@ class SecureServiceAdaptor(object):
         return wrapper
 
 
-class SecureServiceFabric(object):
+def create_ticket_service(mod='', endpoints=LOCATOR_DEFAULT_ENDPOINTS):
+    if mod == TVM.TYPE:
+        return Service('tvm', endpoints)
+    elif mod == TVM2.TYPE:
+        return Service('tvm2', endpoints)
+    return None
+
+
+def create_secure_provider(mod='', ticket_service=None, **kwargs):
+    if mod == TVM.TYPE:
+        return TVM(
+            ticket_service,
+            Credentials(**kwargs)
+        )
+    elif mod == TVM2.TYPE:
+        return TVM2(
+            ticket_service,
+            Credentials(**kwargs)
+        )
+    return Promiscuous()
+
+
+class SecureServiceFactory(object):
 
     @staticmethod
-    def make_secure_adaptor(service, mod, client_id, client_secret, tok_update_sec=None):
+    def make_secure_adaptor(service, endpoints=None, mod='', token_expiration_s=0, **kwargs):
         """
         :param service: Service to wrap in.
-        :param mod: Name (type) of token refresh backend.
-        :param client_id: Client identifier.
-        :param client_secret: Client secret.
-        :param tok_update_sec: Token update interval in seconds.
+        :param endpoints: Token service endpoints. By default endpoints from service will be used.
+        :param mod: Type of authentication.
+        :param token_expiration_s: Token update interval in seconds.
+        :param kwargs: Mod-specific arguments. For TVM/TVM2 it is `client_id` and `client_secret`.
         """
-        if mod == 'TVM':
-            return SecureServiceAdaptor(service, TVM(client_id, client_secret), tok_update_sec)
+        endpoints = endpoints or service.endpoints
 
-        return SecureServiceAdaptor(service, Promiscuous(), tok_update_sec)
+        ticket_service = create_ticket_service(mod, endpoints)
+        provider = create_secure_provider(mod, ticket_service, **kwargs)
+        return SecureServiceAdaptor(service, provider, token_expiration_s)
