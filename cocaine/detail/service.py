@@ -38,8 +38,8 @@ class Service(BaseService):
         if io_loop:
             warnings.warn('io_loop argument is deprecated.', DeprecationWarning)
         super(Service, self).__init__(name=name, endpoints=LOCATOR_DEFAULT_ENDPOINT, io_loop=io_loop)
-        self.locator_endpoints = endpoints
         self.locator = locator
+        self.locator_endpoints = locator.endpoints if locator else endpoints
         self.timeout = timeout  # time for the resolve operation
         # Dispatch tree
         self.api = {}

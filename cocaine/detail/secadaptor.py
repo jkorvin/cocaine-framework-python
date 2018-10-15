@@ -190,7 +190,7 @@ class SecureServiceFactory(object):
         :param token_expiration_s: Token update interval in seconds.
         :param kwargs: Mod-specific arguments. For TVM/TVM2 it is `client_id` and `client_secret`.
         """
-        endpoints = endpoints or service.endpoints
+        endpoints = endpoints or service.locator_endpoints
 
         ticket_service = create_ticket_service(mod, endpoints)
         provider = create_secure_provider(mod, ticket_service, **kwargs)
