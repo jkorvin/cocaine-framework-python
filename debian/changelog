@@ -1,3 +1,9 @@
+cocaine-framework-python (0.12.14.7) unstable; urgency=low
+
+  * fix: Fix locator_endpoints of service
+
+ -- Artem Selishchev <arselishev@gmail.com>  Mon, 15 Oct 2018 17:00:55 +0300
+
 cocaine-framework-python (0.12.14.6) unstable; urgency=low
 
   * Fix tests, deprecate io_loop passing (#79)
