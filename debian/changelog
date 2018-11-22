@@ -1,3 +1,12 @@
+cocaine-framework-python (0.12.14.9) trusty; urgency=medium
+
+  * Increase msgpack Unpacker's limits: 2G -> 4G
+  * Update to python-msgpack=0.4.8-yandex3
+  * Set default limits explicitly for safer update to msgpack=6.0
+  * Log correctly when log queue is full
+
+ -- Evgenii Gorinov <jonny-k@yandex-team.ru>  Thu, 22 Nov 2018 16:39:17 +0300
+
 cocaine-framework-python (0.12.14.8) unstable; urgency=low
 
   * fix: Fix deb dependency on python-six
