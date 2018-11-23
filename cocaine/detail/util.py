@@ -29,7 +29,7 @@ import msgpack
 import six
 
 
-msgpack_limit = 2 ** 31 - 1
+msgpack_limit = 2 ** 32 - 1
 
 msgpack_pack = msgpack.pack
 msgpack_packb = msgpack.packb
@@ -41,6 +41,7 @@ msgpack_unpackb = partial(msgpack.unpackb,
                           max_ext_len=msgpack_limit)
 msgpack_unpacker = partial(msgpack.Unpacker,
                            use_list=True,
+                           max_buffer_size=msgpack_limit,
                            max_str_len=msgpack_limit,
                            max_bin_len=msgpack_limit,
                            max_array_len=msgpack_limit,
